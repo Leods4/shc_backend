@@ -687,6 +687,16 @@ use App\Http\Resources\ProgressoResource;
 class UsuarioController extends Controller
 {
     /**
+     * Retorna os dados do próprio usuário autenticado
+     */
+    public function me(Request $request)
+    {
+        $user = $request->user()->load('curso');
+
+        return new UserResource($user);
+    }
+
+    /**
      * Lista usuários
      */
     public function index(Request $request)
@@ -3662,7 +3672,6 @@ use App\Http\Controllers\ConfiguracaoController;
 use App\Http\Controllers\CursoController;
 use App\Http\Controllers\CategoriaController;
 
-
 // 1. Autenticação (Público)
 Route::post('/auth/login', [AuthController::class, 'login']);
 
@@ -3672,12 +3681,17 @@ Route::middleware('auth:sanctum')->group(function () {
     // 2.1. Auth
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
+    
     // (Rota para o *próprio* usuário logado)
     Route::post('/usuarios/avatar', [UsuarioController::class, 'updateAvatar']);
     // Visualizar Avatar (Qualquer usuário logado pode ver)
     Route::get('/usuarios/avatar/{filename}', [UsuarioController::class, 'showAvatar']);
 
     // 2.2. Usuários (CRUD)
+    
+    // Rota para buscar o próprio usuário logado (Adicionado)
+    Route::get('/usuarios/me', [UsuarioController::class, 'me']);
+
     // (Listar)
     Route::get('/usuarios', [UsuarioController::class, 'index'])->middleware('can:view-users');
     // (Criar)
