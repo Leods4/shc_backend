@@ -20,6 +20,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
     // (Rota para o *próprio* usuário logado)
     Route::post('/usuarios/avatar', [UsuarioController::class, 'updateAvatar']);
+    // Visualizar Avatar (Qualquer usuário logado pode ver)
+    Route::get('/usuarios/avatar/{filename}', [UsuarioController::class, 'showAvatar']);
 
     // 2.2. Usuários (CRUD)
     // (Listar)
@@ -61,6 +63,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // (Coordenador avalia)
         Route::patch('/avaliar', [CertificadoController::class, 'avaliar'])->middleware('can:avaliar-certificado,certificado');
+
+        // Visualizar PDF do Certificado (Protegido via ID do certificado)
+        Route::get('/certificados/{certificado}/arquivo', [CertificadoController::class, 'showArquivo'])
+        ->whereNumber('certificado');
     });
 
     // 2.4. Configurações (Admin)

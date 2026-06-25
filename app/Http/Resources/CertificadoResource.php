@@ -30,7 +30,7 @@ class CertificadoResource extends JsonResource
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
 
             // URL pública do PDF
-            'arquivo_url' => Storage::url($this->arquivo_url),
+            'arquivo_url' => url('/api/certificados/' . $this->id . '/arquivo'),
 
             // Campos da validação
             'horas_validadas' => $this->horas_validadas,

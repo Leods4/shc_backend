@@ -192,6 +192,21 @@ class UsuarioController extends Controller
     }
 
     /**
+     * Exibe a foto de perfil (Avatar)
+     */
+    public function showAvatar($filename)
+    {
+        $path = 'avatars/' . $filename;
+
+        if (!Storage::disk('public')->exists($path)) {
+            return response()->json(['message' => 'Avatar não encontrado.'], 404);
+        }
+
+        // Retorna o arquivo com os cabeçalhos corretos para exibir no navegador
+        return Storage::disk('public')->response($path);
+    }
+
+    /**
      * Importa usuários em lote
      */
     public function import(Request $request)

@@ -24,8 +24,8 @@ class UserResource extends JsonResource
             // Enums: retornar o valor do enum
             'tipo' => $this->tipo?->value,
 
-            'avatar_url' => $this->avatar_url
-                ? Storage::url($this->avatar_url)
+            'avatar_url' => $this->avatar_url 
+                ? url('/api/usuarios/' . $this->avatar_url) // Note: extraia apenas o nome do arquivo se necessário
                 : null,
 
             'fase' => $this->fase,

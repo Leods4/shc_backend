@@ -256,4 +256,37 @@ class CertificadoController extends Controller
 
         return response()->noContent();
     }
+
+    /**
+     * Exibe o arquivo PDF do certificado de forma segura
+     */
+    public function showArquivo(Certificado $certificado)
+    {
+        $user = Auth::user();
+
+        // 1. Regras de Segurança (Autorização)
+        // Se for aluno, só pode acessar se o certificado for dele
+        if ($user->isAluno() && $certificado->aluno_id !== $user->id) {
+            return response()->json(['message' => 'Acesso negado. Este certificado pertence a outro aluno.'], 403);
+        }
+        
+        // Se for coordenador, só pode acessar se o aluno for do seu curso
+        if ($user->isCoordenador()) {
+            // Carrega o aluno para verificar o curso, se ainda não estiver carregado
+            $certificado->loadMissing('aluno'); 
+            
+            if ($certificado->aluno->curso_id !== $user->curso_id) {
+                 return response()->json(['message' => 'Acesso negado. Aluno de outro curso.'], 403);
+            }
+        }
+
+        // 2. Verifica se o arquivo físico existe no disco
+        if (!$certificado->arquivo_url || !Storage::disk('public')->exists($certificado->arquivo_url)) {
+            return response()->json(['message' => 'Arquivo PDF não encontrado no servidor.'], 404);
+        }
+
+        // 3. Retorna o PDF para visualização no navegador
+        // Nota: Se quiser forçar o download em vez de exibir, troque 'response' por 'download'
+        return Storage::disk('public')->response($certificado->arquivo_url);
+    }
 }
