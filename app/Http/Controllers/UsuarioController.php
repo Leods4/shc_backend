@@ -16,6 +16,16 @@ use App\Http\Resources\ProgressoResource;
 class UsuarioController extends Controller
 {
     /**
+     * Retorna os dados do próprio usuário autenticado
+     */
+    public function me(Request $request)
+    {
+        $user = $request->user()->load('curso');
+
+        return new UserResource($user);
+    }
+
+    /**
      * Lista usuários
      */
     public function index(Request $request)
