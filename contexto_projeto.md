@@ -493,6 +493,39 @@ class CertificadoController extends Controller
 
         return response()->noContent();
     }
+
+    /**
+     * Exibe o arquivo PDF do certificado de forma segura
+     */
+    public function showArquivo(Certificado $certificado)
+    {
+        $user = Auth::user();
+
+        // 1. Regras de Segurança (Autorização)
+        // Se for aluno, só pode acessar se o certificado for dele
+        if ($user->isAluno() && $certificado->aluno_id !== $user->id) {
+            return response()->json(['message' => 'Acesso negado. Este certificado pertence a outro aluno.'], 403);
+        }
+        
+        // Se for coordenador, só pode acessar se o aluno for do seu curso
+        if ($user->isCoordenador()) {
+            // Carrega o aluno para verificar o curso, se ainda não estiver carregado
+            $certificado->loadMissing('aluno'); 
+            
+            if ($certificado->aluno->curso_id !== $user->curso_id) {
+                 return response()->json(['message' => 'Acesso negado. Aluno de outro curso.'], 403);
+            }
+        }
+
+        // 2. Verifica se o arquivo físico existe no disco
+        if (!$certificado->arquivo_url || !Storage::disk('public')->exists($certificado->arquivo_url)) {
+            return response()->json(['message' => 'Arquivo PDF não encontrado no servidor.'], 404);
+        }
+
+        // 3. Retorna o PDF para visualização no navegador
+        // Nota: Se quiser forçar o download em vez de exibir, troque 'response' por 'download'
+        return Storage::disk('public')->response($certificado->arquivo_url);
+    }
 }
 ```
 
@@ -830,6 +863,21 @@ class UsuarioController extends Controller
     }
 
     /**
+     * Exibe a foto de perfil (Avatar)
+     */
+    public function showAvatar($filename)
+    {
+        $path = 'avatars/' . $filename;
+
+        if (!Storage::disk('public')->exists($path)) {
+            return response()->json(['message' => 'Avatar não encontrado.'], 404);
+        }
+
+        // Retorna o arquivo com os cabeçalhos corretos para exibir no navegador
+        return Storage::disk('public')->response($path);
+    }
+
+    /**
      * Importa usuários em lote
      */
     public function import(Request $request)
@@ -969,7 +1017,7 @@ class CertificadoResource extends JsonResource
             'created_at' => $this->created_at->format('Y-m-d H:i:s'),
 
             // URL pública do PDF
-            'arquivo_url' => Storage::url($this->arquivo_url),
+            'arquivo_url' => url('/api/certificados/' . $this->id . '/arquivo'),
 
             // Campos da validação
             'horas_validadas' => $this->horas_validadas,
@@ -1060,8 +1108,8 @@ class UserResource extends JsonResource
             // Enums: retornar o valor do enum
             'tipo' => $this->tipo?->value,
 
-            'avatar_url' => $this->avatar_url
-                ? Storage::url($this->avatar_url)
+            'avatar_url' => $this->avatar_url 
+                ? url('/api/usuarios/' . $this->avatar_url) // Note: extraia apenas o nome do arquivo se necessário
                 : null,
 
             'fase' => $this->fase,
@@ -3626,6 +3674,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
     // (Rota para o *próprio* usuário logado)
     Route::post('/usuarios/avatar', [UsuarioController::class, 'updateAvatar']);
+    // Visualizar Avatar (Qualquer usuário logado pode ver)
+    Route::get('/usuarios/avatar/{filename}', [UsuarioController::class, 'showAvatar']);
 
     // 2.2. Usuários (CRUD)
     // (Listar)
@@ -3667,6 +3717,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // (Coordenador avalia)
         Route::patch('/avaliar', [CertificadoController::class, 'avaliar'])->middleware('can:avaliar-certificado,certificado');
+
+        // Visualizar PDF do Certificado (Protegido via ID do certificado)
+        Route::get('/certificados/{certificado}/arquivo', [CertificadoController::class, 'showArquivo'])
+        ->whereNumber('certificado');
     });
 
     // 2.4. Configurações (Admin)
