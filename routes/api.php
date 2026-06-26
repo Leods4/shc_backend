@@ -56,7 +56,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Restrição whereNumber('certificado') adicionada
     Route::prefix('certificados/{certificado}')->whereNumber('certificado')->scopeBindings()->group(function () {
-        Route::get('/', [CertificadoController::class, 'show']); // Adicionar policy (aluno dono, coord, sec, admin)
+        Route::get('/', [CertificadoController::class, 'show'])->middleware('can:view-certificado,certificado');
         
         // --- ROTAS ADICIONADAS PARA COMPLETAR O CRUD DE CERTIFICADOS ---
         // (Atualização geral - Ex: aluno edita o envio antes de ser avaliado)

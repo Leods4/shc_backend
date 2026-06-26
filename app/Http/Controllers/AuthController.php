@@ -13,13 +13,18 @@ class AuthController extends Controller
 {
     public function login(Request $request)
     {
-        // Validação absorvida do LoginRequest
         $request->validate([
             'cpf' => ['required', 'string'],
             'password' => ['required', 'string'],
         ]);
 
-        $user = User::where('cpf', $request->cpf)->first();
+        $cpfLimpo = preg_replace('/\D/', '', $request->cpf);
+
+        $cpfFormatado = strlen($cpfLimpo) === 11
+            ? preg_replace('/(\d{3})(\d{3})(\d{3})(\d{2})/', '$1.$2.$3-$4', $cpfLimpo)
+            : $request->cpf;
+
+        $user = User::where('cpf', $cpfFormatado)->first();
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
@@ -27,9 +32,9 @@ class AuthController extends Controller
             ]);
         }
 
-        // Revoga tokens antigos
-        $user->tokens()->delete();
+        // REMOVIDO: $user->tokens()->delete();
 
+        // O Sanctum agora criará um token paralelo a qualquer outro existente
         $token = $user->createToken('shc-token')->plainTextToken;
 
         return new AuthPayloadResource($user->load('curso'), $token);

@@ -3,18 +3,32 @@
 namespace App\Http\Controllers;
 
 use App\Models\Categoria;
-use App\Http\Resources\CategoriaResource;
 use Illuminate\Http\Request;
 
 class CategoriaController extends Controller
 {
+    /**
+     * Formata o objeto Categoria para array (substitui o CategoriaResource)
+     */
+    private function formatCategoria(Categoria $categoria): array
+    {
+        return [
+            'id' => $categoria->id,
+            'nome' => $categoria->nome,
+        ];
+    }
+
     /**
      * Lista todas as categorias (Usado no dropdown de cadastro de horas)
      */
     public function index()
     {
         // Retorna ordenado alfabeticamente
-        return CategoriaResource::collection(Categoria::orderBy('nome')->get());
+        $categorias = Categoria::orderBy('nome')->get();
+        
+        return response()->json(
+            $categorias->map(fn($categoria) => $this->formatCategoria($categoria))
+        );
     }
 
     /**
@@ -28,7 +42,7 @@ class CategoriaController extends Controller
 
         $categoria = Categoria::create(['nome' => $request->nome]);
 
-        return new CategoriaResource($categoria);
+        return response()->json($this->formatCategoria($categoria), 201);
     }
 
     /**
@@ -36,7 +50,7 @@ class CategoriaController extends Controller
      */
     public function show(Categoria $categoria)
     {
-        return new CategoriaResource($categoria);
+        return response()->json($this->formatCategoria($categoria));
     }
 
     /**
@@ -50,7 +64,7 @@ class CategoriaController extends Controller
 
         $categoria->update(['nome' => $request->nome]);
 
-        return new CategoriaResource($categoria);
+        return response()->json($this->formatCategoria($categoria));
     }
 
     /**
@@ -58,8 +72,11 @@ class CategoriaController extends Controller
      */
     public function destroy(Categoria $categoria)
     {
-        // Opcional: Verificar se existem certificados usando esta categoria antes de excluir
-        // if ($categoria->certificados()->exists()) { ... erro ... }
+        if (\App\Models\Certificado::where('categoria_id', $categoria->id)->exists()) {
+            return response()->json([
+                'message' => 'Não é possível excluir esta categoria, pois existem certificados vinculados a ela.'
+            ], 422);
+        }
 
         $categoria->delete();
 

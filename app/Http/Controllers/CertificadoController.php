@@ -157,12 +157,11 @@ class CertificadoController extends Controller
     }
 
     /**
-     * EXPORT — Exporta dados para um sistema externo
+     * EXPORT — Exporta dados para um sistema externo (Apenas Admin)
      */
     public function export(Request $request)
     {
-        $user = Auth::user();
-
+        // Não precisamos verificar o perfil do usuário aqui, pois o Middleware já garantiu que é Admin
         $query = Certificado::query()->with('aluno', 'coordenador', 'categoria');
 
         if ($request->filled('aluno_id')) {
@@ -184,16 +183,7 @@ class CertificadoController extends Controller
             ]);
         }
 
-        if ($user->isAluno()) {
-
-            $query->where('aluno_id', $user->id);
-
-        } elseif ($user->isCoordenador()) {
-
-            $query->whereHas('aluno', fn($q) =>
-                $q->where('curso_id', $user->curso_id)
-            );
-        }
+        // Os blocos isAluno() e isCoordenador() foram removidos.
 
         $certificados = $query->latest()->get();
 

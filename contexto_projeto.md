@@ -114,13 +114,18 @@ class AuthController extends Controller
 {
     public function login(Request $request)
     {
-        // Validação absorvida do LoginRequest
         $request->validate([
             'cpf' => ['required', 'string'],
             'password' => ['required', 'string'],
         ]);
 
-        $user = User::where('cpf', $request->cpf)->first();
+        $cpfLimpo = preg_replace('/\D/', '', $request->cpf);
+
+        $cpfFormatado = strlen($cpfLimpo) === 11
+            ? preg_replace('/(\d{3})(\d{3})(\d{3})(\d{2})/', '$1.$2.$3-$4', $cpfLimpo)
+            : $request->cpf;
+
+        $user = User::where('cpf', $cpfFormatado)->first();
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
@@ -128,9 +133,9 @@ class AuthController extends Controller
             ]);
         }
 
-        // Revoga tokens antigos
-        $user->tokens()->delete();
+        // REMOVIDO: $user->tokens()->delete();
 
+        // O Sanctum agora criará um token paralelo a qualquer outro existente
         $token = $user->createToken('shc-token')->plainTextToken;
 
         return new AuthPayloadResource($user->load('curso'), $token);
@@ -168,18 +173,32 @@ class AuthController extends Controller
 namespace App\Http\Controllers;
 
 use App\Models\Categoria;
-use App\Http\Resources\CategoriaResource;
 use Illuminate\Http\Request;
 
 class CategoriaController extends Controller
 {
+    /**
+     * Formata o objeto Categoria para array (substitui o CategoriaResource)
+     */
+    private function formatCategoria(Categoria $categoria): array
+    {
+        return [
+            'id' => $categoria->id,
+            'nome' => $categoria->nome,
+        ];
+    }
+
     /**
      * Lista todas as categorias (Usado no dropdown de cadastro de horas)
      */
     public function index()
     {
         // Retorna ordenado alfabeticamente
-        return CategoriaResource::collection(Categoria::orderBy('nome')->get());
+        $categorias = Categoria::orderBy('nome')->get();
+        
+        return response()->json(
+            $categorias->map(fn($categoria) => $this->formatCategoria($categoria))
+        );
     }
 
     /**
@@ -193,7 +212,7 @@ class CategoriaController extends Controller
 
         $categoria = Categoria::create(['nome' => $request->nome]);
 
-        return new CategoriaResource($categoria);
+        return response()->json($this->formatCategoria($categoria), 201);
     }
 
     /**
@@ -201,7 +220,7 @@ class CategoriaController extends Controller
      */
     public function show(Categoria $categoria)
     {
-        return new CategoriaResource($categoria);
+        return response()->json($this->formatCategoria($categoria));
     }
 
     /**
@@ -215,7 +234,7 @@ class CategoriaController extends Controller
 
         $categoria->update(['nome' => $request->nome]);
 
-        return new CategoriaResource($categoria);
+        return response()->json($this->formatCategoria($categoria));
     }
 
     /**
@@ -223,8 +242,11 @@ class CategoriaController extends Controller
      */
     public function destroy(Categoria $categoria)
     {
-        // Opcional: Verificar se existem certificados usando esta categoria antes de excluir
-        // if ($categoria->certificados()->exists()) { ... erro ... }
+        if (\App\Models\Certificado::where('categoria_id', $categoria->id)->exists()) {
+            return response()->json([
+                'message' => 'Não é possível excluir esta categoria, pois existem certificados vinculados a ela.'
+            ], 422);
+        }
 
         $categoria->delete();
 
@@ -394,12 +416,11 @@ class CertificadoController extends Controller
     }
 
     /**
-     * EXPORT — Exporta dados para um sistema externo
+     * EXPORT — Exporta dados para um sistema externo (Apenas Admin)
      */
     public function export(Request $request)
     {
-        $user = Auth::user();
-
+        // Não precisamos verificar o perfil do usuário aqui, pois o Middleware já garantiu que é Admin
         $query = Certificado::query()->with('aluno', 'coordenador', 'categoria');
 
         if ($request->filled('aluno_id')) {
@@ -421,16 +442,7 @@ class CertificadoController extends Controller
             ]);
         }
 
-        if ($user->isAluno()) {
-
-            $query->where('aluno_id', $user->id);
-
-        } elseif ($user->isCoordenador()) {
-
-            $query->whereHas('aluno', fn($q) =>
-                $q->where('curso_id', $user->curso_id)
-            );
-        }
+        // Os blocos isAluno() e isCoordenador() foram removidos.
 
         $certificados = $query->latest()->get();
 
@@ -602,19 +614,33 @@ abstract class Controller
 namespace App\Http\Controllers;
 
 use App\Models\Curso;
-use App\Http\Resources\CursoResource;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class CursoController extends Controller
 {
     /**
+     * Formata o objeto Curso para array (substitui o CursoResource)
+     */
+    private function formatCurso(Curso $curso): array
+    {
+        return [
+            'id' => $curso->id,
+            'nome' => $curso->nome,
+            'horas_necessarias' => $curso->horas_necessarias,
+        ];
+    }
+
+    /**
      * Lista os cursos (Público/Autenticado para selects)
      */
     public function index()
     {
         $cursos = Curso::orderBy('nome')->get();
-        return CursoResource::collection($cursos);
+        
+        return response()->json(
+            $cursos->map(fn($curso) => $this->formatCurso($curso))
+        );
     }
 
     /**
@@ -622,7 +648,7 @@ class CursoController extends Controller
      */
     public function show(Curso $curso)
     {
-        return new CursoResource($curso);
+        return response()->json($this->formatCurso($curso));
     }
 
     /**
@@ -637,7 +663,7 @@ class CursoController extends Controller
 
         $curso = Curso::create($validated);
 
-        return new CursoResource($curso);
+        return response()->json($this->formatCurso($curso), 201);
     }
 
     /**
@@ -657,7 +683,7 @@ class CursoController extends Controller
 
         $curso->update($validated);
 
-        return new CursoResource($curso);
+        return response()->json($this->formatCurso($curso));
     }
 
     /**
@@ -665,19 +691,15 @@ class CursoController extends Controller
      */
     public function destroy(Curso $curso)
     {
-        // Impede a exclusão se houver usuários vinculados a este curso
-        if ($curso->users()->exists()) {
-            return response()->json([
-                'message' => 'Não é possível excluir este curso pois existem usuários vinculados a ele.'
-            ], 422);
-        }
+        // O bloqueio de if ($curso->users()->exists()) foi removido.
+        // O banco de dados se encarregará de setar 'curso_id' como NULL 
+        // nos usuários, graças ao nullOnDelete() da migration.
 
         $curso->delete();
 
         return response()->noContent();
     }
 }
-
 ```
 
 ## Arquivo: app\Http\Controllers\UsuarioController.php
@@ -695,7 +717,6 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use App\Http\Resources\UserResource;
-use App\Http\Resources\ProgressoResource;
 
 class UsuarioController extends Controller
 {
@@ -736,10 +757,22 @@ class UsuarioController extends Controller
      */
     public function store(Request $request)
     {
+        // 1. Formata o CPF antes da validação
+        if ($request->filled('cpf')) {
+            $cpfLimpo = preg_replace('/\D/', '', $request->cpf);
+            
+            if (strlen($cpfLimpo) === 11) {
+                $request->merge([
+                    'cpf' => preg_replace('/(\d{3})(\d{3})(\d{3})(\d{2})/', '$1.$2.$3-$4', $cpfLimpo)
+                ]);
+            }
+        }
+
+        // 2. Agora o Validator vai testar a string já formatada (ex: 000.000.000-00)
         $data = $request->validate([
             'nome' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users'],
-            'cpf' => ['required', 'string', 'max:14', 'unique:users'],
+            'cpf' => ['required', 'string', 'max:14', 'unique:users'], // Passará corretamente
             'data_nascimento' => ['required', 'date'],
             'matricula' => ['nullable', 'string', 'unique:users'],
             'password' => ['nullable', 'string', 'min:6'],
@@ -778,6 +811,7 @@ class UsuarioController extends Controller
     {
         $authUser = $request->user();
 
+        // Verifica se o usuário tem permissão para editar (Admin, Secretaria ou o próprio dono do perfil)
         if (
             !$authUser->isAdmin() &&
             !$authUser->isSecretaria() &&
@@ -786,7 +820,19 @@ class UsuarioController extends Controller
             abort(403, 'Ação não autorizada.');
         }
 
-        $validated = $request->validate([
+        // 1. Formata o CPF antes de montar as regras de validação
+        if ($request->filled('cpf')) {
+            $cpfLimpo = preg_replace('/\D/', '', $request->cpf);
+            
+            if (strlen($cpfLimpo) === 11) {
+                $request->merge([
+                    'cpf' => preg_replace('/(\d{3})(\d{3})(\d{3})(\d{2})/', '$1.$2.$3-$4', $cpfLimpo)
+                ]);
+            }
+        }
+
+        // 2. Regras Base (O que qualquer usuário pode alterar no próprio perfil)
+        $rules = [
             'nome' => ['required', 'string', 'max:255'],
             'email' => [
                 'required',
@@ -794,23 +840,37 @@ class UsuarioController extends Controller
                 'max:255',
                 Rule::unique('users')->ignore($user->id),
             ],
-            'cpf' => [
+            'data_nascimento' => ['required', 'date'],
+            'password' => ['nullable', 'string', 'min:6'],
+        ];
+
+        // 3. Regras Restritas (O que apenas Admin e Secretaria podem alterar)
+        if ($authUser->isAdmin() || $authUser->isSecretaria()) {
+            $rules['cpf'] = [
                 'required',
                 'string',
                 'max:14',
                 Rule::unique('users')->ignore($user->id),
-            ],
-            'matricula' => [
+            ];
+            $rules['matricula'] = [
                 'nullable',
                 'string',
                 Rule::unique('users')->ignore($user->id),
-            ],
-            'data_nascimento' => ['required', 'date'],
-            'password' => ['nullable', 'string', 'min:6'],
-            'tipo' => ['required', Rule::enum(TipoUsuario::class)],
-            'curso_id' => ['nullable', 'exists:cursos,id'],
-            'fase' => ['nullable', 'integer'],
-        ]);
+            ];
+            $rules['tipo'] = ['required', Rule::enum(TipoUsuario::class)];
+            $rules['curso_id'] = ['nullable', 'exists:cursos,id'];
+            $rules['fase'] = ['nullable', 'integer'];
+        }
+
+        $validated = $request->validate($rules);
+
+        // Não atualiza a senha caso ela não tenha sido informada
+        if (empty($validated['password'])) {
+            unset($validated['password']);
+        } else {
+            // Se informou a senha, ela precisa ser hasheada antes de salvar
+            $validated['password'] = Hash::make($validated['password']);
+        }
 
         $user->update($validated);
 
@@ -852,7 +912,8 @@ class UsuarioController extends Controller
 
         $horasNecessarias = $user->curso->horas_necessarias ?? 0;
 
-        return new ProgressoResource([
+        // Alterado para retornar diretamente um JSON
+        return response()->json([
             'total_horas_aprovadas' => (int) $totalAprovadas,
             'horas_necessarias' => (int) $horasNecessarias,
             'horas_por_categoria' => $horasPorCategoria,
@@ -984,28 +1045,6 @@ class AuthPayloadResource extends JsonResource
 
 ```
 
-## Arquivo: app\Http\Resources\CategoriaResource.php
-```php
-<?php
-
-namespace App\Http\Resources;
-
-use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\JsonResource;
-
-class CategoriaResource extends JsonResource
-{
-    public function toArray(Request $request): array
-    {
-        return [
-            'id' => $this->id,
-            'nome' => $this->nome,
-        ];
-    }
-}
-
-```
-
 ## Arquivo: app\Http\Resources\CertificadoResource.php
 ```php
 <?php
@@ -1056,53 +1095,6 @@ class CertificadoResource extends JsonResource
 
 ```
 
-## Arquivo: app\Http\Resources\CursoResource.php
-```php
-<?php
-
-namespace App\Http\Resources;
-
-use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\JsonResource;
-
-class CursoResource extends JsonResource
-{
-    public function toArray(Request $request): array
-    {
-        return [
-            'id' => $this->id,
-            'nome' => $this->nome,
-            'horas_necessarias' => $this->horas_necessarias,
-        ];
-    }
-}
-
-```
-
-## Arquivo: app\Http\Resources\ProgressoResource.php
-```php
-<?php
-
-namespace App\Http\Resources;
-
-use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\JsonResource;
-
-class ProgressoResource extends JsonResource
-{
-    public function toArray(Request $request): array
-    {
-        return [
-            'total_horas_aprovadas' => $this->resource['total_horas_aprovadas'],
-            'horas_necessarias' => $this->resource['horas_necessarias'],
-            
-            // Retorna as horas detalhadas por categoria
-            'horas_por_categoria' => $this->resource['horas_por_categoria'] ?? [],
-        ];
-    }
-}
-```
-
 ## Arquivo: app\Http\Resources\UserResource.php
 ```php
 <?php
@@ -1123,23 +1115,25 @@ class UserResource extends JsonResource
             'email' => $this->email,
             'cpf' => $this->cpf,
 
-            // Novo campo adicionado
             'data_nascimento' => $this->data_nascimento?->format('Y-m-d'),
-
             'matricula' => $this->matricula,
-
-            // Enums: retornar o valor do enum
             'tipo' => $this->tipo?->value,
 
             'avatar_url' => $this->avatar_url 
-                ? url('/api/usuarios/' . $this->avatar_url) // Note: extraia apenas o nome do arquivo se necessário
+                ? url('/api/usuarios/avatars/' . basename($this->avatar_url)) 
                 : null,
 
             'fase' => $this->fase,
 
-            'curso' => new CursoResource($this->whenLoaded('curso')),
+            // A relação 'curso' agora é montada em formato de array anonimamente
+            'curso' => $this->whenLoaded('curso', function () {
+                return [
+                    'id' => $this->curso->id,
+                    'nome' => $this->curso->nome,
+                    'horas_necessarias' => $this->curso->horas_necessarias,
+                ];
+            }),
 
-            // Linha adicionada para o frontend conseguir filtrar por data
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
         ];
     }
@@ -1492,68 +1486,29 @@ use App\Models\User;
 use App\Models\Certificado;
 use App\Observers\AuditObserver;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\URL; // <-- Importação adicionada aqui
+use Illuminate\Support\Facades\URL;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
     public function register(): void
     {
         //
     }
 
-    /**
-     * Bootstrap any application services.
-     */
     public function boot(): void
     {
-        // Força o uso de HTTPS em todas as URLs geradas pelo Laravel (resolve o erro de Mixed Content)
-        URL::forceScheme('https');
 
-        // Remove wrapping do JSON
+        if (app()->environment('production')) {
+            URL::forceScheme('https');
+        }
+
+        // Remove wrapping padrão do JSON ('data')
         JsonResource::withoutWrapping();
 
         // Observers
         User::observe(AuditObserver::class);
         Certificado::observe(AuditObserver::class);
-
-        // Gates de Perfil
-        Gate::define('is-admin', fn (User $user) => $user->isAdmin());
-        Gate::define('is-secretaria', fn (User $user) => $user->isSecretaria());
-        Gate::define('is-coordenador', fn (User $user) => $user->isCoordenador());
-        Gate::define('is-aluno', fn (User $user) => $user->isAluno());
-
-        // Apenas Admin e Secretaria gerenciam usuários e veem o histórico global
-        Gate::define('manage-users', fn (User $user) => $user->isAdmin() || $user->isSecretaria());
-        Gate::define('view-all-history', fn (User $user) => $user->isAdmin() || $user->isSecretaria());
-
-        // Novo Gate: Coordenador também pode visualizar (para listar na index)
-        Gate::define('view-users', fn (User $user) => $user->isAdmin() || $user->isSecretaria() || $user->isCoordenador());
-
-        // Gates de Nível de Recurso
-        Gate::define('avaliar-certificado', function (User $coordenador, $certificado) {
-            if (!$coordenador->isCoordenador()) {
-                return false;
-            }
-
-            return $coordenador->curso_id === $certificado->aluno->curso_id;
-        });
-
-        Gate::define('view-progresso', function (User $user, $aluno) {
-            if ($user->isAdmin() || $user->isSecretaria()) {
-                return true;
-            }
-
-            if ($user->isCoordenador() && $user->curso_id === $aluno->curso_id) {
-                return true;
-            }
-
-            return $user->id === $aluno->id;
-        });
     }
 }
 ```
@@ -1564,7 +1519,6 @@ class AppServiceProvider extends ServiceProvider
 
 namespace App\Providers;
 
-use App\Enums\TipoUsuario;
 use App\Models\User;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 use Illuminate\Support\Facades\Gate;
@@ -1577,41 +1531,59 @@ class AuthServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        // Gates de Perfil
+        // --------------------------------------------------------
+        // 1. Gates de Perfil (Roles)
+        // --------------------------------------------------------
         Gate::define('is-admin', fn (User $user) => $user->isAdmin());
         Gate::define('is-secretaria', fn (User $user) => $user->isSecretaria());
         Gate::define('is-coordenador', fn (User $user) => $user->isCoordenador());
         Gate::define('is-aluno', fn (User $user) => $user->isAluno());
 
-        // Gates de Ação (ex: Secretaria OU Admin)
+        // --------------------------------------------------------
+        // 2. Gates de Ações Globais
+        // --------------------------------------------------------
         Gate::define('manage-users', fn (User $user) => $user->isAdmin() || $user->isSecretaria());
-
         Gate::define('view-all-history', fn (User $user) => $user->isAdmin() || $user->isSecretaria());
+        Gate::define('view-users', fn (User $user) => $user->isAdmin() || $user->isSecretaria() || $user->isCoordenador());
 
-        // Gates de Nível de Recurso (ex: Coordenador só pode avaliar aluno do seu curso)
+        // --------------------------------------------------------
+        // 3. Gates Específicos de Recurso
+        // --------------------------------------------------------
+        Gate::define('view-progresso', function (User $user, $aluno) {
+            if ($user->isAdmin() || $user->isSecretaria()) {
+                return true;
+            }
+            if ($user->isCoordenador() && $user->curso_id === $aluno->curso_id) {
+                return true;
+            }
+            return $user->id === $aluno->id;
+        });
+
         Gate::define('avaliar-certificado', function (User $coordenador, $certificado) {
             if (!$coordenador->isCoordenador()) {
                 return false;
             }
-            // Verifica se o aluno do certificado pertence ao mesmo curso do coordenador
             return $coordenador->curso_id === $certificado->aluno->curso_id;
         });
 
-        Gate::define('view-progresso', function (User $user, $aluno) {
-            // Admin/Secretaria podem ver qualquer progresso
-            if ($user->isAdmin() || $user->isSecretaria()) {
-                return true;
-            }
-            // Coordenador pode ver progresso de aluno do seu curso
-            if ($user->isCoordenador() && $user->curso_id === $aluno->curso_id) {
-                return true;
-            }
-            // Aluno só pode ver o seu próprio progresso
-            return $user->id === $aluno->id;
+        // Gates ausentes adicionados para proteger as rotas de PUT e DELETE de certificados
+        Gate::define('update-certificado', function (User $user, $certificado) {
+            // Apenas o aluno dono pode editar o certificado, e apenas se estiver ENTREGUE
+            return $user->id === $certificado->aluno_id && $certificado->status->value === 'ENTREGUE';
+        });
+
+        Gate::define('delete-certificado', function (User $user, $certificado) {
+            // Apenas o aluno dono pode deletar o certificado, e apenas se estiver ENTREGUE
+            return $user->id === $certificado->aluno_id && $certificado->status->value === 'ENTREGUE';
+        });
+
+        Gate::define('view-certificado', function (User $user, $certificado) {
+            if ($user->isAdmin() || $user->isSecretaria()) return true;
+            if ($user->isCoordenador() && $user->curso_id === $certificado->aluno->curso_id) return true;
+            return $user->id === $certificado->aluno_id;
         });
     }
 }
-
 ```
 
 ## Arquivo: config\app.php
@@ -2019,20 +1991,9 @@ return [
     |--------------------------------------------------------------------------
     | Allowed Origins
     |--------------------------------------------------------------------------
-    |
-    | Origens permitidas (Live Server).
-    |
     */
 
-    'allowed_origins' => [
-        'https://leods4.github.io',
-        'https://panoramic-figure-mushroom.ngrok-free.dev',
-        'https://mariaeduarda1306.github.io',
-        'http://localhost:5500',
-        'http://127.0.0.1:5500',
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-    ],
+    'allowed_origins' => explode(',', env('CORS_ALLOWED_ORIGINS', 'http://localhost:3000', 'http://localhost:5500')),
 
     /*
     |--------------------------------------------------------------------------
@@ -3736,7 +3697,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Restrição whereNumber('certificado') adicionada
     Route::prefix('certificados/{certificado}')->whereNumber('certificado')->scopeBindings()->group(function () {
-        Route::get('/', [CertificadoController::class, 'show']); // Adicionar policy (aluno dono, coord, sec, admin)
+        Route::get('/', [CertificadoController::class, 'show'])->middleware('can:view-certificado,certificado');
         
         // --- ROTAS ADICIONADAS PARA COMPLETAR O CRUD DE CERTIFICADOS ---
         // (Atualização geral - Ex: aluno edita o envio antes de ser avaliado)

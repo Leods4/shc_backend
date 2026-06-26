@@ -3,19 +3,33 @@
 namespace App\Http\Controllers;
 
 use App\Models\Curso;
-use App\Http\Resources\CursoResource;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class CursoController extends Controller
 {
     /**
+     * Formata o objeto Curso para array (substitui o CursoResource)
+     */
+    private function formatCurso(Curso $curso): array
+    {
+        return [
+            'id' => $curso->id,
+            'nome' => $curso->nome,
+            'horas_necessarias' => $curso->horas_necessarias,
+        ];
+    }
+
+    /**
      * Lista os cursos (Público/Autenticado para selects)
      */
     public function index()
     {
         $cursos = Curso::orderBy('nome')->get();
-        return CursoResource::collection($cursos);
+        
+        return response()->json(
+            $cursos->map(fn($curso) => $this->formatCurso($curso))
+        );
     }
 
     /**
@@ -23,7 +37,7 @@ class CursoController extends Controller
      */
     public function show(Curso $curso)
     {
-        return new CursoResource($curso);
+        return response()->json($this->formatCurso($curso));
     }
 
     /**
@@ -38,7 +52,7 @@ class CursoController extends Controller
 
         $curso = Curso::create($validated);
 
-        return new CursoResource($curso);
+        return response()->json($this->formatCurso($curso), 201);
     }
 
     /**
@@ -58,7 +72,7 @@ class CursoController extends Controller
 
         $curso->update($validated);
 
-        return new CursoResource($curso);
+        return response()->json($this->formatCurso($curso));
     }
 
     /**
@@ -66,12 +80,9 @@ class CursoController extends Controller
      */
     public function destroy(Curso $curso)
     {
-        // Impede a exclusão se houver usuários vinculados a este curso
-        if ($curso->users()->exists()) {
-            return response()->json([
-                'message' => 'Não é possível excluir este curso pois existem usuários vinculados a ele.'
-            ], 422);
-        }
+        // O bloqueio de if ($curso->users()->exists()) foi removido.
+        // O banco de dados se encarregará de setar 'curso_id' como NULL 
+        // nos usuários, graças ao nullOnDelete() da migration.
 
         $curso->delete();
 

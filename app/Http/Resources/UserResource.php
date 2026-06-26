@@ -16,23 +16,25 @@ class UserResource extends JsonResource
             'email' => $this->email,
             'cpf' => $this->cpf,
 
-            // Novo campo adicionado
             'data_nascimento' => $this->data_nascimento?->format('Y-m-d'),
-
             'matricula' => $this->matricula,
-
-            // Enums: retornar o valor do enum
             'tipo' => $this->tipo?->value,
 
             'avatar_url' => $this->avatar_url 
-                ? url('/api/usuarios/' . $this->avatar_url) // Note: extraia apenas o nome do arquivo se necessário
+                ? url('/api/usuarios/avatars/' . basename($this->avatar_url)) 
                 : null,
 
             'fase' => $this->fase,
 
-            'curso' => new CursoResource($this->whenLoaded('curso')),
+            // A relação 'curso' agora é montada em formato de array anonimamente
+            'curso' => $this->whenLoaded('curso', function () {
+                return [
+                    'id' => $this->curso->id,
+                    'nome' => $this->curso->nome,
+                    'horas_necessarias' => $this->curso->horas_necessarias,
+                ];
+            }),
 
-            // Linha adicionada para o frontend conseguir filtrar por data
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
         ];
     }

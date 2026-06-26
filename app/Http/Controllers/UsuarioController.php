@@ -11,7 +11,6 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use App\Http\Resources\UserResource;
-use App\Http\Resources\ProgressoResource;
 
 class UsuarioController extends Controller
 {
@@ -52,10 +51,22 @@ class UsuarioController extends Controller
      */
     public function store(Request $request)
     {
+        // 1. Formata o CPF antes da validação
+        if ($request->filled('cpf')) {
+            $cpfLimpo = preg_replace('/\D/', '', $request->cpf);
+            
+            if (strlen($cpfLimpo) === 11) {
+                $request->merge([
+                    'cpf' => preg_replace('/(\d{3})(\d{3})(\d{3})(\d{2})/', '$1.$2.$3-$4', $cpfLimpo)
+                ]);
+            }
+        }
+
+        // 2. Agora o Validator vai testar a string já formatada (ex: 000.000.000-00)
         $data = $request->validate([
             'nome' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users'],
-            'cpf' => ['required', 'string', 'max:14', 'unique:users'],
+            'cpf' => ['required', 'string', 'max:14', 'unique:users'], // Passará corretamente
             'data_nascimento' => ['required', 'date'],
             'matricula' => ['nullable', 'string', 'unique:users'],
             'password' => ['nullable', 'string', 'min:6'],
@@ -94,6 +105,7 @@ class UsuarioController extends Controller
     {
         $authUser = $request->user();
 
+        // Verifica se o usuário tem permissão para editar (Admin, Secretaria ou o próprio dono do perfil)
         if (
             !$authUser->isAdmin() &&
             !$authUser->isSecretaria() &&
@@ -102,7 +114,19 @@ class UsuarioController extends Controller
             abort(403, 'Ação não autorizada.');
         }
 
-        $validated = $request->validate([
+        // 1. Formata o CPF antes de montar as regras de validação
+        if ($request->filled('cpf')) {
+            $cpfLimpo = preg_replace('/\D/', '', $request->cpf);
+            
+            if (strlen($cpfLimpo) === 11) {
+                $request->merge([
+                    'cpf' => preg_replace('/(\d{3})(\d{3})(\d{3})(\d{2})/', '$1.$2.$3-$4', $cpfLimpo)
+                ]);
+            }
+        }
+
+        // 2. Regras Base (O que qualquer usuário pode alterar no próprio perfil)
+        $rules = [
             'nome' => ['required', 'string', 'max:255'],
             'email' => [
                 'required',
@@ -110,23 +134,37 @@ class UsuarioController extends Controller
                 'max:255',
                 Rule::unique('users')->ignore($user->id),
             ],
-            'cpf' => [
+            'data_nascimento' => ['required', 'date'],
+            'password' => ['nullable', 'string', 'min:6'],
+        ];
+
+        // 3. Regras Restritas (O que apenas Admin e Secretaria podem alterar)
+        if ($authUser->isAdmin() || $authUser->isSecretaria()) {
+            $rules['cpf'] = [
                 'required',
                 'string',
                 'max:14',
                 Rule::unique('users')->ignore($user->id),
-            ],
-            'matricula' => [
+            ];
+            $rules['matricula'] = [
                 'nullable',
                 'string',
                 Rule::unique('users')->ignore($user->id),
-            ],
-            'data_nascimento' => ['required', 'date'],
-            'password' => ['nullable', 'string', 'min:6'],
-            'tipo' => ['required', Rule::enum(TipoUsuario::class)],
-            'curso_id' => ['nullable', 'exists:cursos,id'],
-            'fase' => ['nullable', 'integer'],
-        ]);
+            ];
+            $rules['tipo'] = ['required', Rule::enum(TipoUsuario::class)];
+            $rules['curso_id'] = ['nullable', 'exists:cursos,id'];
+            $rules['fase'] = ['nullable', 'integer'];
+        }
+
+        $validated = $request->validate($rules);
+
+        // Não atualiza a senha caso ela não tenha sido informada
+        if (empty($validated['password'])) {
+            unset($validated['password']);
+        } else {
+            // Se informou a senha, ela precisa ser hasheada antes de salvar
+            $validated['password'] = Hash::make($validated['password']);
+        }
 
         $user->update($validated);
 
@@ -168,7 +206,8 @@ class UsuarioController extends Controller
 
         $horasNecessarias = $user->curso->horas_necessarias ?? 0;
 
-        return new ProgressoResource([
+        // Alterado para retornar diretamente um JSON
+        return response()->json([
             'total_horas_aprovadas' => (int) $totalAprovadas,
             'horas_necessarias' => (int) $horasNecessarias,
             'horas_por_categoria' => $horasPorCategoria,
