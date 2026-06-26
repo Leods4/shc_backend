@@ -3685,7 +3685,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // (Rota para o *próprio* usuário logado)
     Route::post('/usuarios/avatar', [UsuarioController::class, 'updateAvatar']);
     // Visualizar Avatar (Qualquer usuário logado pode ver)
-    Route::get('/usuarios/avatar/{filename}', [UsuarioController::class, 'showAvatar']);
+    Route::get('/usuarios/avatars/{filename}', [UsuarioController::class, 'showAvatar']);
 
     // 2.2. Usuários (CRUD)
     
@@ -3733,8 +3733,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/avaliar', [CertificadoController::class, 'avaliar'])->middleware('can:avaliar-certificado,certificado');
 
         // Visualizar PDF do Certificado (Protegido via ID do certificado)
-        Route::get('/certificados/{certificado}/arquivo', [CertificadoController::class, 'showArquivo'])
-        ->whereNumber('certificado');
+        // CORREÇÃO: Removido o prefixo duplicado '/certificados/{certificado}'
+        Route::get('/arquivo', [CertificadoController::class, 'showArquivo']);
     });
 
     // 2.4. Configurações (Admin)

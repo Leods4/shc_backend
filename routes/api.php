@@ -21,7 +21,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // (Rota para o *próprio* usuário logado)
     Route::post('/usuarios/avatar', [UsuarioController::class, 'updateAvatar']);
     // Visualizar Avatar (Qualquer usuário logado pode ver)
-    Route::get('/usuarios/avatar/{filename}', [UsuarioController::class, 'showAvatar']);
+    Route::get('/usuarios/avatars/{filename}', [UsuarioController::class, 'showAvatar']);
 
     // 2.2. Usuários (CRUD)
     
