@@ -8,6 +8,7 @@ use App\Observers\AuditObserver;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\URL; // <-- Importação adicionada aqui
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -24,6 +25,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Força o uso de HTTPS em todas as URLs geradas pelo Laravel (resolve o erro de Mixed Content)
+        URL::forceScheme('https');
+
         // Remove wrapping do JSON
         JsonResource::withoutWrapping();
 
