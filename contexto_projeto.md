@@ -1397,16 +1397,16 @@ class User extends Authenticatable
     // --------------------------------------------------------
     
     public function isAluno(): bool { 
-        return $this->tipo?->value === TipoUsuario::ALUNO || $this->tipo === 'ALUNO'; 
+        return $this->tipo === TipoUsuario::ALUNO || $this->tipo === 'ALUNO'; 
     }
     public function isCoordenador(): bool { 
-        return $this->tipo?->value === TipoUsuario::COORDENADOR || $this->tipo === 'COORDENADOR'; 
+        return $this->tipo === TipoUsuario::COORDENADOR || $this->tipo === 'COORDENADOR'; 
     }
     public function isSecretaria(): bool { 
-        return $this->tipo?->value === TipoUsuario::SECRETARIA || $this->tipo === 'SECRETARIA'; 
+        return $this->tipo === TipoUsuario::SECRETARIA || $this->tipo === 'SECRETARIA'; 
     }
     public function isAdmin(): bool { 
-        return $this->tipo?->value === TipoUsuario::ADMINISTRADOR || $this->tipo === 'ADMINISTRADOR'; 
+        return $this->tipo === TipoUsuario::ADMINISTRADOR || $this->tipo === 'ADMINISTRADOR'; 
     }
 }
 
