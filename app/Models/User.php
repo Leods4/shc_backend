@@ -89,9 +89,20 @@ class User extends Authenticatable
         return $this->hasMany(Certificado::class, 'coordenador_id');
     }
 
-    // ... (restante dos helpers mantidos igual) ...
-    public function isAluno(): bool { return $this->tipo === TipoUsuario::ALUNO; }
-    public function isCoordenador(): bool { return $this->tipo === TipoUsuario::COORDENADOR; }
-    public function isSecretaria(): bool { return $this->tipo === TipoUsuario::SECRETARIA; }
-    public function isAdmin(): bool { return $this->tipo === TipoUsuario::ADMINISTRADOR; }
+    // --------------------------------------------------------
+    // Métodos auxiliares que verificam o perfil do usuário:
+    // --------------------------------------------------------
+    
+    public function isAluno(): bool { 
+        return $this->tipo?->value === TipoUsuario::ALUNO || $this->tipo === 'ALUNO'; 
+    }
+    public function isCoordenador(): bool { 
+        return $this->tipo?->value === TipoUsuario::COORDENADOR || $this->tipo === 'COORDENADOR'; 
+    }
+    public function isSecretaria(): bool { 
+        return $this->tipo?->value === TipoUsuario::SECRETARIA || $this->tipo === 'SECRETARIA'; 
+    }
+    public function isAdmin(): bool { 
+        return $this->tipo?->value === TipoUsuario::ADMINISTRADOR || $this->tipo === 'ADMINISTRADOR'; 
+    }
 }
