@@ -69,8 +69,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/avaliar', [CertificadoController::class, 'avaliar'])->middleware('can:avaliar-certificado,certificado');
 
         // Visualizar PDF do Certificado (Protegido via ID do certificado)
-        Route::get('/certificados/{certificado}/arquivo', [CertificadoController::class, 'showArquivo'])
-        ->whereNumber('certificado');
+        // CORREÇÃO: Removido o prefixo duplicado '/certificados/{certificado}'
+        Route::get('/arquivo', [CertificadoController::class, 'showArquivo']);
     });
 
     // 2.4. Configurações (Admin)
