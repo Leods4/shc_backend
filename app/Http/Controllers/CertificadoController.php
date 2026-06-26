@@ -84,6 +84,19 @@ class CertificadoController extends Controller
      */
     public function store(Request $request)
     {
+        // --- INÍCIO DA TRAVA DE MANUTENÇÃO ---
+        $config = \App\Models\Configuracao::pluck('valor', 'chave')->toArray();
+        $modoManutencao = $config['modo_manutencao'] ?? false;
+
+        if ($modoManutencao === 'true' || $modoManutencao === '1' || $modoManutencao === true) 
+            {
+            return response()->json(
+            [
+                'message' => 'O sistema está em manutenção. O envio de novos certificados está temporariamente suspenso.'
+            ], 403);
+        }
+        // --- FIM DA TRAVA ---
+
         $validated = $request->validate([
             'categoria_id' => ['required', 'integer', 'exists:categorias,id'],
             'nome_certificado' => ['required', 'string', 'max:255'],
