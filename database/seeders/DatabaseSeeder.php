@@ -142,12 +142,52 @@ class DatabaseSeeder extends Seeder
         $this->command->info('Gerando Alunos e Certificados dinâmicos com Faker...');
         $faker = Faker::create('pt_BR');
 
+        // Títulos realistas e profissionais para os certificados
+        $titulosCertificados = [
+            'Bootcamp Desenvolvedor Full Stack',
+            'Workshop de Clean Architecture',
+            'Semana Acadêmica de Tecnologia',
+            'Curso de Python para Ciência de Dados',
+            'Certificação AWS Cloud Practitioner',
+            'Palestra: Inteligência Artificial no Mercado',
+            'Curso de Scrum e Metodologias Ágeis',
+            'Introdução ao React e Next.js',
+            'Maratona de Programação',
+            'Congresso Nacional de Tecnologia da Informação',
+            'Minicurso de Segurança da Informação',
+            'Desenvolvimento de APIs com Laravel',
+            'Gestão de Projetos de Software',
+            'Imersão em Banco de Dados NoSQL',
+            'Workshop de UI/UX Design'
+        ];
+
+        // Instituições realistas
+        $instituicoes = [
+            'Alura', 
+            'Udemy', 
+            'Rocketseat', 
+            'DIO (Digital Innovation One)', 
+            'AWS Training', 
+            'Microsoft Learn', 
+            'Universidade FMP', 
+            'Google Cloud Skills'
+        ];
+
         // Cria 10 alunos aleatórios
         for ($i = 0; $i < 10; $i++) {
+            
+            // Gera um nome e e-mail mais profissional
+            $primeiroNome = $faker->firstName();
+            $sobrenome = $faker->lastName();
+            $nomeCompleto = $primeiroNome . ' ' . $sobrenome;
+            
+            // Exemplo: joao.silva45@fmp.edu.br
+            $emailFicticio = strtolower(iconv('UTF-8', 'ASCII//TRANSLIT', $primeiroNome . '.' . $sobrenome)) . $faker->numberBetween(10, 99) . '@fmp.edu.br';
+
             $aluno = User::firstOrCreate(
-                ['email' => $faker->unique()->safeEmail()],
+                ['email' => $emailFicticio],
                 [
-                    'nome'            => $faker->name(),
+                    'nome'            => $nomeCompleto,
                     'cpf'             => $faker->unique()->cpf(false), // cpf sem formatação, o Mutator cuida disso
                     'data_nascimento' => $faker->date('Y-m-d', '2005-01-01'),
                     'matricula'       => $faker->unique()->numerify('2025####'),
@@ -174,8 +214,8 @@ class DatabaseSeeder extends Seeder
                 Certificado::create([
                     'aluno_id'                 => $aluno->id,
                     'categoria_id'             => $categorias->random()->id,
-                    'nome_certificado'         => 'Curso de ' . $faker->words(3, true),
-                    'instituicao'              => $faker->company(),
+                    'nome_certificado'         => $faker->randomElement($titulosCertificados),
+                    'instituicao'              => $faker->randomElement($instituicoes),
                     'data_emissao'             => $faker->dateTimeBetween('-1 year', 'now')->format('Y-m-d'),
                     'carga_horaria_solicitada' => $cargaSolicitada,
                     'arquivo_url'              => 'certificados/dummy.pdf', // Assumindo que este arquivo exista no storage
@@ -184,7 +224,7 @@ class DatabaseSeeder extends Seeder
                     // Preenche dados de avaliação apenas se não estiver "ENTREGUE"
                     'coordenador_id'           => $isAvaliado ? $coordenador->id : null,
                     'data_validacao'           => $isAvaliado ? Carbon::now()->subDays($faker->numberBetween(1, 30)) : null,
-                    'observacao'               => $isAvaliado ? $faker->sentence() : null,
+                    'observacao'               => $isAvaliado ? 'Análise realizada com sucesso. ' . $faker->sentence() : null,
                     'horas_validadas'          => $status === StatusCertificado::APROVADO ? $cargaSolicitada : 
                                                  ($status === StatusCertificado::REPROVADO ? 0 : 
                                                  ($isAvaliado ? $faker->numberBetween(1, $cargaSolicitada) : null)),
