@@ -22,18 +22,21 @@ class DatabaseSeeder extends Seeder
         DB::transaction(function () {
             $this->command->info('Iniciando o seeding do banco de dados...');
 
-            $cursos = $this->seedCursos();
+            $cursoAds = $this->seedCursos();
             $categorias = $this->seedCategorias();
-            $usuariosBase = $this->seedUsuariosBase($cursos['ads']);
+            $usuariosBase = $this->seedUsuariosBase($cursoAds);
             
-            // Gera dados em massa para testes de carga e paginação
-            $this->seedAlunosECertificadosFaker($cursos['ads'], $categorias, $usuariosBase['coordenador']);
+            // Pega todos os cursos criados no banco para distribuir os alunos
+            $todosOsCursos = Curso::all();
+
+            // Gera dados em massa espalhando entre todos os cursos
+            $this->seedAlunosECertificadosFaker($todosOsCursos, $categorias, $usuariosBase['coordenador']);
 
             $this->command->info('Seeding concluído com sucesso!');
         });
     }
 
-    private function seedCursos(): array
+    private function seedCursos(): Curso
     {
         $this->command->info('Semeando Cursos...');
 
@@ -52,7 +55,8 @@ class DatabaseSeeder extends Seeder
             Curso::firstOrCreate(['nome' => $nome], ['horas_necessarias' => $horas]);
         }
 
-        return ['ads' => $cursoAds];
+        // Retornamos apenas o ADS para usar como base para o coordenador padrao
+        return $cursoAds;
     }
 
     private function seedCategorias(): \Illuminate\Database\Eloquent\Collection
@@ -137,7 +141,7 @@ class DatabaseSeeder extends Seeder
         ];
     }
 
-    private function seedAlunosECertificadosFaker(Curso $curso, $categorias, User $coordenador): void
+    private function seedAlunosECertificadosFaker(\Illuminate\Database\Eloquent\Collection $cursos, $categorias, User $coordenador): void
     {
         $this->command->info('Gerando Alunos e Certificados dinâmicos com Faker...');
         $faker = Faker::create('pt_BR');
@@ -173,14 +177,14 @@ class DatabaseSeeder extends Seeder
 
         for ($i = 0; $i < 10; $i++) {
             
-            // Usando firstName() e lastName() separamos os nomes reais dos prefixos do Faker.
-            // O Faker não vai inserir "Dr." ou "Sra." aqui.
             $primeiroNome = $faker->firstName();
             $sobrenome = $faker->lastName();
             $nomeCompleto = $primeiroNome . ' ' . $sobrenome;
             
-            // Cria um e-mail sem acentos e em minúsculas
             $emailFicticio = strtolower(iconv('UTF-8', 'ASCII//TRANSLIT', $primeiroNome . '.' . $sobrenome)) . $faker->numberBetween(10, 99) . '@fmp.edu.br';
+
+            // Escolhe um curso aleatório da coleção de todos os cursos
+            $cursoAleatorio = $cursos->random();
 
             $aluno = User::firstOrCreate(
                 ['email' => $emailFicticio],
@@ -191,8 +195,8 @@ class DatabaseSeeder extends Seeder
                     'matricula'       => $faker->unique()->numerify('2025####'),
                     'password'        => Hash::make('aluno123'),
                     'tipo'            => TipoUsuario::ALUNO,
-                    'curso_id'        => $curso->id,
-                    'fase'            => $faker->numberBetween(1, 6),
+                    'curso_id'        => $cursoAleatorio->id, // Usa o ID do curso aleatório
+                    'fase'            => $faker->numberBetween(1, 8), // Aumentado até a 8ª fase para mais variedade
                 ]
             );
 
