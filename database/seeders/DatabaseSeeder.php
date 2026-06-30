@@ -142,7 +142,6 @@ class DatabaseSeeder extends Seeder
         $this->command->info('Gerando Alunos e Certificados dinâmicos com Faker...');
         $faker = Faker::create('pt_BR');
 
-        // Títulos realistas e profissionais para os certificados
         $titulosCertificados = [
             'Bootcamp Desenvolvedor Full Stack',
             'Workshop de Clean Architecture',
@@ -161,7 +160,6 @@ class DatabaseSeeder extends Seeder
             'Workshop de UI/UX Design'
         ];
 
-        // Instituições realistas
         $instituicoes = [
             'Alura', 
             'Udemy', 
@@ -173,22 +171,22 @@ class DatabaseSeeder extends Seeder
             'Google Cloud Skills'
         ];
 
-        // Cria 10 alunos aleatórios
         for ($i = 0; $i < 10; $i++) {
             
-            // Gera um nome e e-mail mais profissional
+            // Usando firstName() e lastName() separamos os nomes reais dos prefixos do Faker.
+            // O Faker não vai inserir "Dr." ou "Sra." aqui.
             $primeiroNome = $faker->firstName();
             $sobrenome = $faker->lastName();
             $nomeCompleto = $primeiroNome . ' ' . $sobrenome;
             
-            // Exemplo: joao.silva45@fmp.edu.br
+            // Cria um e-mail sem acentos e em minúsculas
             $emailFicticio = strtolower(iconv('UTF-8', 'ASCII//TRANSLIT', $primeiroNome . '.' . $sobrenome)) . $faker->numberBetween(10, 99) . '@fmp.edu.br';
 
             $aluno = User::firstOrCreate(
                 ['email' => $emailFicticio],
                 [
                     'nome'            => $nomeCompleto,
-                    'cpf'             => $faker->unique()->cpf(false), // cpf sem formatação, o Mutator cuida disso
+                    'cpf'             => $faker->unique()->cpf(false),
                     'data_nascimento' => $faker->date('Y-m-d', '2005-01-01'),
                     'matricula'       => $faker->unique()->numerify('2025####'),
                     'password'        => Hash::make('aluno123'),
@@ -198,7 +196,6 @@ class DatabaseSeeder extends Seeder
                 ]
             );
 
-            // Para cada aluno, gera entre 1 e 4 certificados
             $numCertificados = $faker->numberBetween(1, 4);
             for ($j = 0; $j < $numCertificados; $j++) {
                 $status = $faker->randomElement([
@@ -218,10 +215,8 @@ class DatabaseSeeder extends Seeder
                     'instituicao'              => $faker->randomElement($instituicoes),
                     'data_emissao'             => $faker->dateTimeBetween('-1 year', 'now')->format('Y-m-d'),
                     'carga_horaria_solicitada' => $cargaSolicitada,
-                    'arquivo_url'              => 'certificados/dummy.pdf', // Assumindo que este arquivo exista no storage
+                    'arquivo_url'              => 'certificados/dummy.pdf', 
                     'status'                   => $status,
-                    
-                    // Preenche dados de avaliação apenas se não estiver "ENTREGUE"
                     'coordenador_id'           => $isAvaliado ? $coordenador->id : null,
                     'data_validacao'           => $isAvaliado ? Carbon::now()->subDays($faker->numberBetween(1, 30)) : null,
                     'observacao'               => $isAvaliado ? 'Análise realizada com sucesso. ' . $faker->sentence() : null,
