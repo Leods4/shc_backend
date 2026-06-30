@@ -3475,18 +3475,21 @@ class DatabaseSeeder extends Seeder
         DB::transaction(function () {
             $this->command->info('Iniciando o seeding do banco de dados...');
 
-            $cursos = $this->seedCursos();
+            $cursoAds = $this->seedCursos();
             $categorias = $this->seedCategorias();
-            $usuariosBase = $this->seedUsuariosBase($cursos['ads']);
+            $usuariosBase = $this->seedUsuariosBase($cursoAds);
             
-            // Gera dados em massa para testes de carga e paginação
-            $this->seedAlunosECertificadosFaker($cursos['ads'], $categorias, $usuariosBase['coordenador']);
+            // Pega todos os cursos criados no banco para distribuir os alunos
+            $todosOsCursos = Curso::all();
+
+            // Gera dados em massa espalhando entre todos os cursos
+            $this->seedAlunosECertificadosFaker($todosOsCursos, $categorias, $usuariosBase['coordenador']);
 
             $this->command->info('Seeding concluído com sucesso!');
         });
     }
 
-    private function seedCursos(): array
+    private function seedCursos(): Curso
     {
         $this->command->info('Semeando Cursos...');
 
@@ -3505,7 +3508,8 @@ class DatabaseSeeder extends Seeder
             Curso::firstOrCreate(['nome' => $nome], ['horas_necessarias' => $horas]);
         }
 
-        return ['ads' => $cursoAds];
+        // Retornamos apenas o ADS para usar como base para o coordenador padrao
+        return $cursoAds;
     }
 
     private function seedCategorias(): \Illuminate\Database\Eloquent\Collection
@@ -3590,28 +3594,65 @@ class DatabaseSeeder extends Seeder
         ];
     }
 
-    private function seedAlunosECertificadosFaker(Curso $curso, $categorias, User $coordenador): void
+    private function seedAlunosECertificadosFaker(\Illuminate\Database\Eloquent\Collection $cursos, $categorias, User $coordenador): void
     {
         $this->command->info('Gerando Alunos e Certificados dinâmicos com Faker...');
         $faker = Faker::create('pt_BR');
 
-        // Cria 10 alunos aleatórios
+        $titulosCertificados = [
+            'Bootcamp Desenvolvedor Full Stack',
+            'Workshop de Clean Architecture',
+            'Semana Acadêmica de Tecnologia',
+            'Curso de Python para Ciência de Dados',
+            'Certificação AWS Cloud Practitioner',
+            'Palestra: Inteligência Artificial no Mercado',
+            'Curso de Scrum e Metodologias Ágeis',
+            'Introdução ao React e Next.js',
+            'Maratona de Programação',
+            'Congresso Nacional de Tecnologia da Informação',
+            'Minicurso de Segurança da Informação',
+            'Desenvolvimento de APIs com Laravel',
+            'Gestão de Projetos de Software',
+            'Imersão em Banco de Dados NoSQL',
+            'Workshop de UI/UX Design'
+        ];
+
+        $instituicoes = [
+            'Alura', 
+            'Udemy', 
+            'Rocketseat', 
+            'DIO (Digital Innovation One)', 
+            'AWS Training', 
+            'Microsoft Learn', 
+            'Universidade FMP', 
+            'Google Cloud Skills'
+        ];
+
         for ($i = 0; $i < 10; $i++) {
+            
+            $primeiroNome = $faker->firstName();
+            $sobrenome = $faker->lastName();
+            $nomeCompleto = $primeiroNome . ' ' . $sobrenome;
+            
+            $emailFicticio = strtolower(iconv('UTF-8', 'ASCII//TRANSLIT', $primeiroNome . '.' . $sobrenome)) . $faker->numberBetween(10, 99) . '@fmp.edu.br';
+
+            // Escolhe um curso aleatório da coleção de todos os cursos
+            $cursoAleatorio = $cursos->random();
+
             $aluno = User::firstOrCreate(
-                ['email' => $faker->unique()->safeEmail()],
+                ['email' => $emailFicticio],
                 [
-                    'nome'            => $faker->name(),
-                    'cpf'             => $faker->unique()->cpf(false), // cpf sem formatação, o Mutator cuida disso
+                    'nome'            => $nomeCompleto,
+                    'cpf'             => $faker->unique()->cpf(false),
                     'data_nascimento' => $faker->date('Y-m-d', '2005-01-01'),
                     'matricula'       => $faker->unique()->numerify('2025####'),
                     'password'        => Hash::make('aluno123'),
                     'tipo'            => TipoUsuario::ALUNO,
-                    'curso_id'        => $curso->id,
-                    'fase'            => $faker->numberBetween(1, 6),
+                    'curso_id'        => $cursoAleatorio->id, // Usa o ID do curso aleatório
+                    'fase'            => $faker->numberBetween(1, 8), // Aumentado até a 8ª fase para mais variedade
                 ]
             );
 
-            // Para cada aluno, gera entre 1 e 4 certificados
             $numCertificados = $faker->numberBetween(1, 4);
             for ($j = 0; $j < $numCertificados; $j++) {
                 $status = $faker->randomElement([
@@ -3627,17 +3668,15 @@ class DatabaseSeeder extends Seeder
                 Certificado::create([
                     'aluno_id'                 => $aluno->id,
                     'categoria_id'             => $categorias->random()->id,
-                    'nome_certificado'         => 'Curso de ' . $faker->words(3, true),
-                    'instituicao'              => $faker->company(),
+                    'nome_certificado'         => $faker->randomElement($titulosCertificados),
+                    'instituicao'              => $faker->randomElement($instituicoes),
                     'data_emissao'             => $faker->dateTimeBetween('-1 year', 'now')->format('Y-m-d'),
                     'carga_horaria_solicitada' => $cargaSolicitada,
-                    'arquivo_url'              => 'certificados/dummy.pdf', // Assumindo que este arquivo exista no storage
+                    'arquivo_url'              => 'certificados/dummy.pdf', 
                     'status'                   => $status,
-                    
-                    // Preenche dados de avaliação apenas se não estiver "ENTREGUE"
                     'coordenador_id'           => $isAvaliado ? $coordenador->id : null,
                     'data_validacao'           => $isAvaliado ? Carbon::now()->subDays($faker->numberBetween(1, 30)) : null,
-                    'observacao'               => $isAvaliado ? $faker->sentence() : null,
+                    'observacao'               => $isAvaliado ? 'Análise realizada com sucesso. ' . $faker->sentence() : null,
                     'horas_validadas'          => $status === StatusCertificado::APROVADO ? $cargaSolicitada : 
                                                  ($status === StatusCertificado::REPROVADO ? 0 : 
                                                  ($isAvaliado ? $faker->numberBetween(1, $cargaSolicitada) : null)),
