@@ -286,12 +286,14 @@ class CertificadoController extends Controller
             $query->where('aluno_id', $request->aluno_id);
         }
 
+        // Atualizado para buscar também pela matrícula do aluno
         if ($request->filled('search')) {
             $term = $request->search;
 
             $query->whereHas('aluno', function ($q) use ($term) {
                 $q->where('nome', 'like', "%{$term}%")
-                    ->orWhere('cpf', 'like', "%{$term}%");
+                    ->orWhere('cpf', 'like', "%{$term}%")
+                    ->orWhere('matricula', 'like', "%{$term}%");
             });
         }
 
@@ -315,9 +317,22 @@ class CertificadoController extends Controller
             $query->where('categoria_id', $request->categoria_id);
         }
 
-        // 1. ADICIONE O FILTRO GLOBAL AQUI:
         if ($request->filled('status')) {
             $query->where('status', $request->status);
+        }
+
+        // Filtro exato por Fase do Aluno
+        if ($request->filled('fase')) {
+            $query->whereHas('aluno', function ($q) use ($request) {
+                $q->where('fase', $request->fase);
+            });
+        }
+
+        // Filtro por Matrícula do Aluno (usando like para busca parcial)
+        if ($request->filled('matricula')) {
+            $query->whereHas('aluno', function ($q) use ($request) {
+                $q->where('matricula', 'like', "%{$request->matricula}%");
+            });
         }
 
         // REGRAS POR PAPEL
@@ -440,6 +455,20 @@ class CertificadoController extends Controller
                 $request->data_inicio,
                 $request->data_fim,
             ]);
+        }
+
+        // Filtro exato por Fase do Aluno na exportação
+        if ($request->filled('fase')) {
+            $query->whereHas('aluno', function ($q) use ($request) {
+                $q->where('fase', $request->fase);
+            });
+        }
+
+        // Filtro por Matrícula do Aluno na exportação
+        if ($request->filled('matricula')) {
+            $query->whereHas('aluno', function ($q) use ($request) {
+                $q->where('matricula', 'like', "%{$request->matricula}%");
+            });
         }
 
         // Os blocos isAluno() e isCoordenador() foram removidos.
@@ -730,7 +759,6 @@ class UsuarioController extends Controller
         return new UserResource($user);
     }
 
-
     /**
      * Lista usuários com suporte a filtros
      */
@@ -743,7 +771,7 @@ class UsuarioController extends Controller
         // 1. FILTROS AVANÇADOS
         // --------------------------------------------------------
 
-        // Busca geral por Nome, CPF ou Matrícula
+        // Busca geral simultânea (Mantida para casos de pesquisa de topo)
         if ($request->filled('search')) {
             $term = $request->search;
             $query->where(function ($q) use ($term) {
@@ -751,6 +779,21 @@ class UsuarioController extends Controller
                   ->orWhere('cpf', 'like', "%{$term}%")
                   ->orWhere('matricula', 'like', "%{$term}%");
             });
+        }
+
+        // Filtro separado por Nome (busca parcial)
+        if ($request->filled('nome')) {
+            $query->where('nome', 'like', "%{$request->nome}%");
+        }
+
+        // Filtro separado por CPF (busca parcial/exata)
+        if ($request->filled('cpf')) {
+            $query->where('cpf', 'like', "%{$request->cpf}%");
+        }
+
+        // Filtro separado por Matrícula (busca parcial/exata)
+        if ($request->filled('matricula')) {
+            $query->where('matricula', 'like', "%{$request->matricula}%");
         }
 
         // Filtro específico por Fase (Útil para alunos)
@@ -767,12 +810,15 @@ class UsuarioController extends Controller
             $query->where('tipo', TipoUsuario::ALUNO->value)
                   ->where('curso_id', $authUser->curso_id);
         } else {
-            // Se for Admin ou Secretaria, eles podem filtrar por curso e por tipo de usuário livremente
+            // Se for Admin ou Secretaria, eles podem filtrar por curso e por papel livremente
             if ($request->filled('curso_id')) {
                 $query->where('curso_id', $request->curso_id);
             }
 
-            if ($request->filled('tipo')) {
+            // Filtro separado por Papel (aceita '?papel=ALUNO' ou '?tipo=ALUNO' na URL)
+            if ($request->filled('papel')) {
+                $query->where('tipo', $request->papel);
+            } elseif ($request->filled('tipo')) {
                 $query->where('tipo', $request->tipo);
             }
         }
@@ -980,6 +1026,29 @@ class UsuarioController extends Controller
         return response()->json([
             'avatar_url' => Storage::url($path),
         ]);
+    }
+
+    /**
+     * Remove o avatar do utilizador autenticado
+     */
+    public function destroyAvatar(Request $request)
+    {
+        $user = Auth::user();
+
+        // Verifica se o utilizador tem um avatar associado
+        if ($user->avatar_url) {
+            // Apaga o ficheiro do armazenamento público
+            Storage::disk('public')->delete($user->avatar_url);
+            
+            // Atualiza a base de dados para remover a referência do ficheiro
+            $user->update([
+                'avatar_url' => null,
+            ]);
+
+            return response()->json(['message' => 'Avatar removido com sucesso.']);
+        }
+
+        return response()->json(['message' => 'O utilizador não possui um avatar para remover.'], 404);
     }
 
     /**
@@ -3790,6 +3859,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/usuarios/avatar', [UsuarioController::class, 'updateAvatar']);
     // Visualizar Avatar (Qualquer usuário logado pode ver)
     Route::get('/usuarios/avatars/{filename}', [UsuarioController::class, 'showAvatar']);
+    // Rota para eliminar o avatar do utilizador logado
+    Route::delete('/usuarios/avatar', [UsuarioController::class, 'destroyAvatar']);
 
     // 2.2. Usuários (CRUD)
     
