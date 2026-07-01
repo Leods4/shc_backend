@@ -218,6 +218,29 @@ class UsuarioController extends Controller
     }
 
     /**
+     * Remove o avatar do utilizador autenticado
+     */
+    public function destroyAvatar(Request $request)
+    {
+        $user = \Illuminate\Support\Facades\Auth::user();
+
+        // Verifica se o utilizador tem um avatar associado
+        if ($user->avatar_url) {
+            // Apaga o ficheiro do armazenamento público
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($user->avatar_url);
+            
+            // Atualiza a base de dados para remover a referência do ficheiro
+            $user->update([
+                'avatar_url' => null,
+            ]);
+
+            return response()->json(['message' => 'Avatar removido com sucesso.']);
+        }
+
+        return response()->json(['message' => 'O utilizador não possui um avatar para remover.'], 404);
+    }
+
+    /**
      * Retorna progresso do aluno (com horas por categoria)
      */
     public function getProgresso(User $user)

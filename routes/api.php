@@ -22,6 +22,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/usuarios/avatar', [UsuarioController::class, 'updateAvatar']);
     // Visualizar Avatar (Qualquer usuário logado pode ver)
     Route::get('/usuarios/avatars/{filename}', [UsuarioController::class, 'showAvatar']);
+    // Rota para eliminar o avatar do utilizador logado
+    Route::delete('/usuarios/avatar', [UsuarioController::class, 'destroyAvatar']);
 
     // 2.2. Usuários (CRUD)
     

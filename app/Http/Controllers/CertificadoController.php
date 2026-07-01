@@ -27,12 +27,14 @@ class CertificadoController extends Controller
             $query->where('aluno_id', $request->aluno_id);
         }
 
+        // Atualizado para buscar também pela matrícula do aluno
         if ($request->filled('search')) {
             $term = $request->search;
 
             $query->whereHas('aluno', function ($q) use ($term) {
                 $q->where('nome', 'like', "%{$term}%")
-                    ->orWhere('cpf', 'like', "%{$term}%");
+                    ->orWhere('cpf', 'like', "%{$term}%")
+                    ->orWhere('matricula', 'like', "%{$term}%");
             });
         }
 
@@ -56,9 +58,22 @@ class CertificadoController extends Controller
             $query->where('categoria_id', $request->categoria_id);
         }
 
-        // 1. ADICIONE O FILTRO GLOBAL AQUI:
         if ($request->filled('status')) {
             $query->where('status', $request->status);
+        }
+
+        // Filtro exato por Fase do Aluno
+        if ($request->filled('fase')) {
+            $query->whereHas('aluno', function ($q) use ($request) {
+                $q->where('fase', $request->fase);
+            });
+        }
+
+        // Filtro por Matrícula do Aluno (usando like para busca parcial)
+        if ($request->filled('matricula')) {
+            $query->whereHas('aluno', function ($q) use ($request) {
+                $q->where('matricula', 'like', "%{$request->matricula}%");
+            });
         }
 
         // REGRAS POR PAPEL
@@ -181,6 +196,20 @@ class CertificadoController extends Controller
                 $request->data_inicio,
                 $request->data_fim,
             ]);
+        }
+
+        // Filtro exato por Fase do Aluno na exportação
+        if ($request->filled('fase')) {
+            $query->whereHas('aluno', function ($q) use ($request) {
+                $q->where('fase', $request->fase);
+            });
+        }
+
+        // Filtro por Matrícula do Aluno na exportação
+        if ($request->filled('matricula')) {
+            $query->whereHas('aluno', function ($q) use ($request) {
+                $q->where('matricula', 'like', "%{$request->matricula}%");
+            });
         }
 
         // Os blocos isAluno() e isCoordenador() foram removidos.
