@@ -24,7 +24,6 @@ class UsuarioController extends Controller
         return new UserResource($user);
     }
 
-
     /**
      * Lista usuários com suporte a filtros
      */
@@ -37,7 +36,7 @@ class UsuarioController extends Controller
         // 1. FILTROS AVANÇADOS
         // --------------------------------------------------------
 
-        // Busca geral por Nome, CPF ou Matrícula
+        // Busca geral simultânea (Mantida para casos de pesquisa de topo)
         if ($request->filled('search')) {
             $term = $request->search;
             $query->where(function ($q) use ($term) {
@@ -45,6 +44,21 @@ class UsuarioController extends Controller
                   ->orWhere('cpf', 'like', "%{$term}%")
                   ->orWhere('matricula', 'like', "%{$term}%");
             });
+        }
+
+        // Filtro separado por Nome (busca parcial)
+        if ($request->filled('nome')) {
+            $query->where('nome', 'like', "%{$request->nome}%");
+        }
+
+        // Filtro separado por CPF (busca parcial/exata)
+        if ($request->filled('cpf')) {
+            $query->where('cpf', 'like', "%{$request->cpf}%");
+        }
+
+        // Filtro separado por Matrícula (busca parcial/exata)
+        if ($request->filled('matricula')) {
+            $query->where('matricula', 'like', "%{$request->matricula}%");
         }
 
         // Filtro específico por Fase (Útil para alunos)
@@ -61,12 +75,15 @@ class UsuarioController extends Controller
             $query->where('tipo', TipoUsuario::ALUNO->value)
                   ->where('curso_id', $authUser->curso_id);
         } else {
-            // Se for Admin ou Secretaria, eles podem filtrar por curso e por tipo de usuário livremente
+            // Se for Admin ou Secretaria, eles podem filtrar por curso e por papel livremente
             if ($request->filled('curso_id')) {
                 $query->where('curso_id', $request->curso_id);
             }
 
-            if ($request->filled('tipo')) {
+            // Filtro separado por Papel (aceita '?papel=ALUNO' ou '?tipo=ALUNO' na URL)
+            if ($request->filled('papel')) {
+                $query->where('tipo', $request->papel);
+            } elseif ($request->filled('tipo')) {
                 $query->where('tipo', $request->tipo);
             }
         }
@@ -218,29 +235,6 @@ class UsuarioController extends Controller
     }
 
     /**
-     * Remove o avatar do utilizador autenticado
-     */
-    public function destroyAvatar(Request $request)
-    {
-        $user = \Illuminate\Support\Facades\Auth::user();
-
-        // Verifica se o utilizador tem um avatar associado
-        if ($user->avatar_url) {
-            // Apaga o ficheiro do armazenamento público
-            \Illuminate\Support\Facades\Storage::disk('public')->delete($user->avatar_url);
-            
-            // Atualiza a base de dados para remover a referência do ficheiro
-            $user->update([
-                'avatar_url' => null,
-            ]);
-
-            return response()->json(['message' => 'Avatar removido com sucesso.']);
-        }
-
-        return response()->json(['message' => 'O utilizador não possui um avatar para remover.'], 404);
-    }
-
-    /**
      * Retorna progresso do aluno (com horas por categoria)
      */
     public function getProgresso(User $user)
@@ -297,6 +291,29 @@ class UsuarioController extends Controller
         return response()->json([
             'avatar_url' => Storage::url($path),
         ]);
+    }
+
+    /**
+     * Remove o avatar do utilizador autenticado
+     */
+    public function destroyAvatar(Request $request)
+    {
+        $user = Auth::user();
+
+        // Verifica se o utilizador tem um avatar associado
+        if ($user->avatar_url) {
+            // Apaga o ficheiro do armazenamento público
+            Storage::disk('public')->delete($user->avatar_url);
+            
+            // Atualiza a base de dados para remover a referência do ficheiro
+            $user->update([
+                'avatar_url' => null,
+            ]);
+
+            return response()->json(['message' => 'Avatar removido com sucesso.']);
+        }
+
+        return response()->json(['message' => 'O utilizador não possui um avatar para remover.'], 404);
     }
 
     /**
