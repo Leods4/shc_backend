@@ -149,7 +149,7 @@ class DatabaseSeeder extends Seeder
                 'nome'            => 'Armando da Silvera',
                 'cpf'             => '333.333.333-33',
                 'data_nascimento' => '2003-04-15',
-                'matricula'       => '20250001',
+                'matricula'       => '20250341',
                 'password'        => Hash::make('aluno123'),
                 'tipo'            => TipoUsuario::ALUNO,
                 'avatar_url'      => 'https://ui-avatars.com/api/?name=Joao+Silva',
