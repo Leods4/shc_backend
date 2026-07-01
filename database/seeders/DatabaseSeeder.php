@@ -87,7 +87,7 @@ class DatabaseSeeder extends Seeder
                 'nome'            => 'Administrador Principal',
                 'cpf'             => '000.000.000-00',
                 'data_nascimento' => '1990-01-01',
-                'password'        => Hash::make('admin123'),
+                'password'        => Hash::make('admin321'),
                 'tipo'            => TipoUsuario::ADMINISTRADOR,
             ]
         );
@@ -104,7 +104,32 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        // 2.1 Secretaria
+        $secretaria = User::firstOrCreate(
+            ['email' => 'elisangela.da.silva@fmp.edu.br'],
+            [
+                'nome'            => 'Elisangela da Silva',
+                'cpf'             => '097.652.749-98',
+                'data_nascimento' => '1997-05-11',
+                'password'        => Hash::make('sec123'),
+                'tipo'            => TipoUsuario::SECRETARIA,
+            ]
+        );
+        
         // 3. Coordenador
+        $coordenador = User::firstOrCreate(
+            ['email' => 'guilherme.gomes@fmp.edu.br'],
+            [
+                'nome'            => 'Guilherme Gomes',
+                'cpf'             => '125.621.669-06',
+                'data_nascimento' => '1989-08-20',
+                'password'        => Hash::make('coord123'),
+                'tipo'            => TipoUsuario::COORDENADOR,
+                'curso_id'        => $cursoAds->id,
+            ]
+        );
+
+        // 3.1 Coordenador
         $coordenador = User::firstOrCreate(
             ['email' => 'coord.ads@fmp.edu.br'],
             [
@@ -121,8 +146,24 @@ class DatabaseSeeder extends Seeder
         $alunoJoao = User::firstOrCreate(
             ['email' => 'aluno@fmp.edu.br'],
             [
-                'nome'            => 'João da Silva',
+                'nome'            => 'Armando da Silvera',
                 'cpf'             => '333.333.333-33',
+                'data_nascimento' => '2003-04-15',
+                'matricula'       => '20250001',
+                'password'        => Hash::make('aluno123'),
+                'tipo'            => TipoUsuario::ALUNO,
+                'avatar_url'      => 'https://ui-avatars.com/api/?name=Joao+Silva',
+                'curso_id'        => $cursoAds->id,
+                'fase'            => 3,
+            ]
+        );
+
+        // 4. Aluno Específico para testes rápidos
+        $alunoJoao = User::firstOrCreate(
+            ['email' => 'joao.silva@fmp.edu.br'],
+            [
+                'nome'            => 'João da Silva',
+                'cpf'             => '007.836.669-00',
                 'data_nascimento' => '2003-04-15',
                 'matricula'       => '20250001',
                 'password'        => Hash::make('aluno123'),
