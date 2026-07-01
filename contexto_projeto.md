@@ -730,25 +730,61 @@ class UsuarioController extends Controller
         return new UserResource($user);
     }
 
+
     /**
-     * Lista usuários
+     * Lista usuários com suporte a filtros
      */
     public function index(Request $request)
     {
         $authUser = Auth::user();
         $query = User::query()->with('curso');
 
-        // Se for coordenador, restringe a busca aos ALUNOS do seu próprio CURSO
+        // --------------------------------------------------------
+        // 1. FILTROS AVANÇADOS
+        // --------------------------------------------------------
+
+        // Busca geral por Nome, CPF ou Matrícula
+        if ($request->filled('search')) {
+            $term = $request->search;
+            $query->where(function ($q) use ($term) {
+                $q->where('nome', 'like', "%{$term}%")
+                  ->orWhere('cpf', 'like', "%{$term}%")
+                  ->orWhere('matricula', 'like', "%{$term}%");
+            });
+        }
+
+        // Filtro específico por Fase (Útil para alunos)
+        if ($request->filled('fase')) {
+            $query->where('fase', $request->fase);
+        }
+
+        // --------------------------------------------------------
+        // 2. REGRAS DE VISUALIZAÇÃO POR PERFIL
+        // --------------------------------------------------------
+
         if ($authUser->isCoordenador()) {
+            // Se for coordenador, restringe obrigatoriamente aos ALUNOS do seu próprio CURSO
             $query->where('tipo', TipoUsuario::ALUNO->value)
                   ->where('curso_id', $authUser->curso_id);
         } else {
-            // Filtro normal de tipo para Admin/Secretaria
-            if ($request->has('tipo')) {
+            // Se for Admin ou Secretaria, eles podem filtrar por curso e por tipo de usuário livremente
+            if ($request->filled('curso_id')) {
+                $query->where('curso_id', $request->curso_id);
+            }
+
+            if ($request->filled('tipo')) {
                 $query->where('tipo', $request->tipo);
             }
         }
 
+        // --------------------------------------------------------
+        // 3. ORDENAÇÃO E RETORNO
+        // --------------------------------------------------------
+        
+        // Ordena os usuários por nome em ordem alfabética para facilitar a leitura no Front-end
+        $query->orderBy('nome');
+
+        // DICA: Se a sua base de dados crescer muito, substitua $query->get() por $query->paginate(15)
         return UserResource::collection($query->get());
     }
 
@@ -3540,7 +3576,7 @@ class DatabaseSeeder extends Seeder
                 'nome'            => 'Administrador Principal',
                 'cpf'             => '000.000.000-00',
                 'data_nascimento' => '1990-01-01',
-                'password'        => Hash::make('admin123'),
+                'password'        => Hash::make('admin321'),
                 'tipo'            => TipoUsuario::ADMINISTRADOR,
             ]
         );
@@ -3557,7 +3593,32 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        // 2.1 Secretaria
+        $secretaria = User::firstOrCreate(
+            ['email' => 'elisangela.da.silva@fmp.edu.br'],
+            [
+                'nome'            => 'Elisangela da Silva',
+                'cpf'             => '097.652.749-98',
+                'data_nascimento' => '1997-05-11',
+                'password'        => Hash::make('sec123'),
+                'tipo'            => TipoUsuario::SECRETARIA,
+            ]
+        );
+        
         // 3. Coordenador
+        $coordenador = User::firstOrCreate(
+            ['email' => 'guilherme.gomes@fmp.edu.br'],
+            [
+                'nome'            => 'Guilherme Gomes',
+                'cpf'             => '125.621.669-06',
+                'data_nascimento' => '1989-08-20',
+                'password'        => Hash::make('coord123'),
+                'tipo'            => TipoUsuario::COORDENADOR,
+                'curso_id'        => $cursoAds->id,
+            ]
+        );
+
+        // 3.1 Coordenador
         $coordenador = User::firstOrCreate(
             ['email' => 'coord.ads@fmp.edu.br'],
             [
@@ -3574,8 +3635,24 @@ class DatabaseSeeder extends Seeder
         $alunoJoao = User::firstOrCreate(
             ['email' => 'aluno@fmp.edu.br'],
             [
-                'nome'            => 'João da Silva',
+                'nome'            => 'Armando da Silvera',
                 'cpf'             => '333.333.333-33',
+                'data_nascimento' => '2003-04-15',
+                'matricula'       => '20250341',
+                'password'        => Hash::make('aluno123'),
+                'tipo'            => TipoUsuario::ALUNO,
+                'avatar_url'      => 'https://ui-avatars.com/api/?name=Joao+Silva',
+                'curso_id'        => $cursoAds->id,
+                'fase'            => 3,
+            ]
+        );
+
+        // 4. Aluno Específico para testes rápidos
+        $alunoJoao = User::firstOrCreate(
+            ['email' => 'joao.silva@fmp.edu.br'],
+            [
+                'nome'            => 'João da Silva',
+                'cpf'             => '007.836.669-00',
                 'data_nascimento' => '2003-04-15',
                 'matricula'       => '20250001',
                 'password'        => Hash::make('aluno123'),
