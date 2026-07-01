@@ -24,25 +24,61 @@ class UsuarioController extends Controller
         return new UserResource($user);
     }
 
+
     /**
-     * Lista usuários
+     * Lista usuários com suporte a filtros
      */
     public function index(Request $request)
     {
         $authUser = Auth::user();
         $query = User::query()->with('curso');
 
-        // Se for coordenador, restringe a busca aos ALUNOS do seu próprio CURSO
+        // --------------------------------------------------------
+        // 1. FILTROS AVANÇADOS
+        // --------------------------------------------------------
+
+        // Busca geral por Nome, CPF ou Matrícula
+        if ($request->filled('search')) {
+            $term = $request->search;
+            $query->where(function ($q) use ($term) {
+                $q->where('nome', 'like', "%{$term}%")
+                  ->orWhere('cpf', 'like', "%{$term}%")
+                  ->orWhere('matricula', 'like', "%{$term}%");
+            });
+        }
+
+        // Filtro específico por Fase (Útil para alunos)
+        if ($request->filled('fase')) {
+            $query->where('fase', $request->fase);
+        }
+
+        // --------------------------------------------------------
+        // 2. REGRAS DE VISUALIZAÇÃO POR PERFIL
+        // --------------------------------------------------------
+
         if ($authUser->isCoordenador()) {
+            // Se for coordenador, restringe obrigatoriamente aos ALUNOS do seu próprio CURSO
             $query->where('tipo', TipoUsuario::ALUNO->value)
                   ->where('curso_id', $authUser->curso_id);
         } else {
-            // Filtro normal de tipo para Admin/Secretaria
-            if ($request->has('tipo')) {
+            // Se for Admin ou Secretaria, eles podem filtrar por curso e por tipo de usuário livremente
+            if ($request->filled('curso_id')) {
+                $query->where('curso_id', $request->curso_id);
+            }
+
+            if ($request->filled('tipo')) {
                 $query->where('tipo', $request->tipo);
             }
         }
 
+        // --------------------------------------------------------
+        // 3. ORDENAÇÃO E RETORNO
+        // --------------------------------------------------------
+        
+        // Ordena os usuários por nome em ordem alfabética para facilitar a leitura no Front-end
+        $query->orderBy('nome');
+
+        // DICA: Se a sua base de dados crescer muito, substitua $query->get() por $query->paginate(15)
         return UserResource::collection($query->get());
     }
 
